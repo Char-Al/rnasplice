@@ -8,20 +8,15 @@ import itertools
 
 
 def main(args):
-    # Open file
-    handle = open(args.file, "r")
+    with open(args.file, "r") as handle:
+        # Read header only
+        header = handle.readline()
 
-    # Read header only
-    header = handle.readline()
+        # Split header by delimiter (e.g., transcript_GBR_1)
+        samples = header.split("\t")
 
-    # Split header by delimiter (e.g., transcript_GBR_1)
-    samples = header.split("\t")
-
-    # Trim replicate number (e.g., transcript_GBR_1 -> transcript_GBR)
-    conditions = [sample.rsplit("_", 1)[0] for sample in samples]
-
-    # Close file
-    handle.close()
+        # Trim replicate number (e.g., transcript_GBR_1 -> transcript_GBR)
+        conditions = [sample.rsplit("_", 1)[0] for sample in samples]
 
     # Create list of consecutive condition indices (e.g., [[1,2], [3,4]])
     last_index = 0

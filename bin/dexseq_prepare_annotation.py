@@ -64,7 +64,7 @@ for f in HTSeq.GFF_Reader(gtf_file):
 # the set that contains the gene.
 # Each gene set forms an 'aggregate gene'.
 
-if aggregateGenes == True:
+if aggregateGenes:
     gene_sets = collections.defaultdict(lambda: set())
     for iv, s in exons.steps():
         # For each step, make a set, 'full_set' of all the gene IDs occuring
@@ -88,25 +88,21 @@ if aggregateGenes == True:
 # The results are stored in the dict 'aggregates', which contains, for each
 # aggregate ID, a list of all its exonic_part features.
 
-aggregates = collections.defaultdict(lambda: list())
+aggregates = collections.defaultdict(lambda: [])
 for iv, s in exons.steps():
     # Skip empty steps
     if len(s) == 0:
         continue
     gene_id = list(s)[0][0]
     ## if aggregateGenes=FALSE, ignore the exons associated to more than one gene ID
-    if aggregateGenes == False:
-        check_set = set()
-        for geneID, transcript_id in s:
-            check_set.add(geneID)
+    if not aggregateGenes:
+        check_set = {geneID for geneID, transcript_id in s}
         if len(check_set) > 1:
             continue
         else:
             aggregate_id = gene_id
-    # Take one of the gene IDs, find the others via gene sets, and
-    # form the aggregate ID from all of them
     else:
-        assert set(gene_id for gene_id, transcript_id in s) <= gene_sets[gene_id]
+        assert {gene_id for gene_id, transcript_id in s} <= gene_sets[gene_id]
         aggregate_id = "+".join(gene_sets[gene_id])
     # Make the feature and store it in 'aggregates'
     f = HTSeq.GenomicFeature(aggregate_id, "exonic_part", iv)
@@ -114,7 +110,7 @@ for iv, s in exons.steps():
     #   f.source = "camara"
     f.attr = {}
     f.attr["gene_id"] = aggregate_id
-    transcript_set = set((transcript_id for gene_id, transcript_id in s))
+    transcript_set = {transcript_id for gene_id, transcript_id in s}
     f.attr["transcripts"] = "+".join(transcript_set)
     aggregates[aggregate_id].append(f)
 
@@ -124,12 +120,16 @@ for iv, s in exons.steps():
 aggregate_features = []
 for l in list(aggregates.values()):
     for i in range(len(l) - 1):
-        assert l[i].name == l[i + 1].name, str(l[i + 1]) + " has wrong name"
-        assert l[i].iv.end <= l[i + 1].iv.start, str(l[i + 1]) + " starts too early"
+        assert l[i].name == l[i + 1].name, f"{str(l[i + 1])} has wrong name"
+        assert l[i].iv.end <= l[i + 1].iv.start, f"{str(l[i + 1])} starts too early"
         if l[i].iv.chrom != l[i + 1].iv.chrom:
-            raise ValueError("Same name found on two chromosomes: %s, %s" % (str(l[i]), str(l[i + 1])))
+            raise ValueError(
+                f"Same name found on two chromosomes: {str(l[i])}, {str(l[i + 1])}"
+            )
         if l[i].iv.strand != l[i + 1].iv.strand:
-            raise ValueError("Same name found on two strands: %s, %s" % (str(l[i]), str(l[i + 1])))
+            raise ValueError(
+                f"Same name found on two strands: {str(l[i])}, {str(l[i + 1])}"
+            )
     aggr_feat = HTSeq.GenomicFeature(
         l[0].name, "aggregate_gene", HTSeq.GenomicInterval(l[0].iv.chrom, l[0].iv.start, l[-1].iv.end, l[0].iv.strand)
     )
@@ -144,10 +144,8 @@ for l in list(aggregates.values()):
 
 aggregate_features.sort(key=lambda f: (f.iv.chrom, f.iv.start))
 
-fout = open(out_file, "w")
-for aggr_feat in aggregate_features:
-    fout.write(aggr_feat.get_gff_line())
-    for f in aggregates[aggr_feat.name]:
-        fout.write(f.get_gff_line())
-
-fout.close()
+with open(out_file, "w") as fout:
+    for aggr_feat in aggregate_features:
+        fout.write(aggr_feat.get_gff_line())
+        for f in aggregates[aggr_feat.name]:
+            fout.write(f.get_gff_line())

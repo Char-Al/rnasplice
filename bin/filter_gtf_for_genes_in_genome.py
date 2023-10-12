@@ -38,15 +38,17 @@ def extract_fasta_seq_names(fasta_name):
 
 def extract_genes_in_genome(fasta, gtf_in, gtf_out):
     seq_names_in_genome = set(extract_fasta_seq_names(fasta))
-    logger.info("Extracted chromosome sequence names from : %s" % fasta)
-    logger.info("All chromosome names: " + ", ".join(sorted(x for x in seq_names_in_genome)))
+    logger.info(f"Extracted chromosome sequence names from : {fasta}")
+    logger.info(
+        "All chromosome names: " + ", ".join(sorted(iter(seq_names_in_genome)))
+    )
     seq_names_in_gtf = set([])
 
     n_total_lines = 0
     n_lines_in_genome = 0
     with open(gtf_out, "w") as f:
         with open(gtf_in) as g:
-            for line in g.readlines():
+            for line in g:
                 n_total_lines += 1
                 seq_name_gtf = line.split("\t")[0]
                 seq_names_in_gtf.add(seq_name_gtf)
@@ -56,9 +58,11 @@ def extract_genes_in_genome(fasta, gtf_in, gtf_out):
     logger.info(
         "Extracted %d / %d lines from %s matching sequences in %s" % (n_lines_in_genome, n_total_lines, gtf_in, fasta)
     )
-    logger.info("All sequence IDs from GTF: " + ", ".join(sorted(x for x in seq_name_gtf)))
+    logger.info(
+        "All sequence IDs from GTF: " + ", ".join(sorted(iter(seq_name_gtf)))
+    )
 
-    logger.info("Wrote matching lines to %s" % gtf_out)
+    logger.info(f"Wrote matching lines to {gtf_out}")
 
 
 if __name__ == "__main__":
