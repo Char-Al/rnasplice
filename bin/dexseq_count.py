@@ -91,7 +91,7 @@ except ImportError:
 gff_file = args[0]
 sam_file = args[1]
 out_file = args[2]
-stranded = opts.stranded == "yes" or opts.stranded == "reverse"
+stranded = opts.stranded in ["yes", "reverse"]
 reverse = opts.stranded == "reverse"
 is_PE = opts.paired == "yes"
 alignment = opts.alignment
@@ -123,13 +123,13 @@ for f in HTSeq.GFF_Reader(gff_file):
 
 # initialise counters
 num_reads = 0
-counts = {}
-counts["_empty"] = 0
-counts["_ambiguous"] = 0
-counts["_lowaqual"] = 0
-counts["_notaligned"] = 0
-counts["_ambiguous_readpair_position"] = 0
-
+counts = {
+    "_empty": 0,
+    "_ambiguous": 0,
+    "_lowaqual": 0,
+    "_notaligned": 0,
+    "_ambiguous_readpair_position": 0,
+}
 # put a zero for each feature ID
 for iv, s in features.steps():
     for f in s:
@@ -177,8 +177,8 @@ def map_read_pair(af, ar):
                 cigop.ref_iv.strand = reverse_strand(cigop.ref_iv.strand)
             for iv, s in features[cigop.ref_iv].steps():
                 rs = rs.union(s)
-    set_of_gene_names = set([f.split(":")[0] for f in rs])
-    if len(set_of_gene_names) == 0:
+    set_of_gene_names = {f.split(":")[0] for f in rs}
+    if not set_of_gene_names:
         return "_empty"
     elif len(set_of_gene_names) > 1:
         return "_ambiguous"
@@ -191,18 +191,13 @@ def clean_read_queue(queue, current_position):
     for i in queue:
         if queue[i].mate_start.pos < current_position:
             warnings.warn(
-                "Read " + i + " claims to have an aligned mate that could not be found in the same chromosome."
+                f"Read {i} claims to have an aligned mate that could not be found in the same chromosome."
             )
             del clean_queue[i]
     return clean_queue
 
 
-if alignment == "sam":
-    reader = HTSeq.SAM_Reader
-else:
-    reader = HTSeq.BAM_Reader
-
-
+reader = HTSeq.SAM_Reader if alignment == "sam" else HTSeq.BAM_Reader
 # Now go through the aligned reads
 num_reads = 0
 
@@ -224,8 +219,8 @@ if not is_PE:
                 cigop.ref_iv.strand = reverse_strand(cigop.ref_iv.strand)
             for iv, s in features[cigop.ref_iv].steps():
                 rs = rs.union(s)
-        set_of_gene_names = set([f.split(":")[0] for f in rs])
-        if len(set_of_gene_names) == 0:
+        set_of_gene_names = {f.split(":")[0] for f in rs}
+        if not set_of_gene_names:
             counts["_empty"] += 1
         elif len(set_of_gene_names) > 1:
             counts["_ambiguous"] += 1
@@ -240,7 +235,7 @@ else:  # paired-end
     alignments = dict()
     if order == "name":
         for af, ar in HTSeq.pair_SAM_alignments(reader(sam_file)):
-            if af == None or ar == None:
+            if af is None or ar is None:
                 continue
             if not ar.aligned:
                 continue
@@ -283,25 +278,23 @@ else:  # paired-end
                 )
             current_chromosome = a.iv.chrom
             current_position = a.iv.start
-            if a.read.name and a.mate_aligned:
-                if a.read.name in alignments:
-                    b = alignments[a.read.name]
-                    if a.pe_which == "first" and b.pe_which == "second":
-                        af = a
-                        ar = b
-                    else:
-                        af = b
-                        ar = a
-                    rs = map_read_pair(af, ar)
-                    del alignments[a.read.name]
-                    counts = update_count_vector(counts, rs)
+            if not a.read.name or not a.mate_aligned:
+                continue
+            if a.read.name in alignments:
+                b = alignments[a.read.name]
+                if a.pe_which == "first" and b.pe_which == "second":
+                    af = a
+                    ar = b
                 else:
-                    if a.mate_start.chrom != a.iv.chrom:
-                        counts["_ambiguous_readpair_position"] += 1
-                        continue
-                    else:
-                        alignments[a.read.name] = a
+                    af = b
+                    ar = a
+                rs = map_read_pair(af, ar)
+                del alignments[a.read.name]
+                counts = update_count_vector(counts, rs)
+            elif a.mate_start.chrom == a.iv.chrom:
+                alignments[a.read.name] = a
             else:
+                counts["_ambiguous_readpair_position"] += 1
                 continue
             num_reads += 1
             if num_reads % 200000 == 0:
@@ -309,9 +302,6 @@ else:  # paired-end
                 sys.stderr.write("%d reads processed.\n" % (num_reads / 2))
 
 
-# Step 3: Write out the results
-
-fout = open(out_file, "w")
-for fn in sorted(counts.keys()):
-    fout.write("%s\t%d\n" % (fn, counts[fn]))
-fout.close()
+with open(out_file, "w") as fout:
+    for fn in sorted(counts.keys()):
+        fout.write("%s\t%d\n" % (fn, counts[fn]))

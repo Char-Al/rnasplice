@@ -32,18 +32,18 @@ def _make_versions_html(versions):
     ]
     for process, tmp_versions in sorted(versions.items()):
         html.append("<tbody>")
-        for i, (tool, version) in enumerate(sorted(tmp_versions.items())):
-            html.append(
-                dedent(
-                    f"""\\
+        html.extend(
+            dedent(
+                f"""\\
                     <tr>
                         <td><samp>{process if (i == 0) else ''}</samp></td>
                         <td><samp>{tool}</samp></td>
                         <td><samp>{version}</samp></td>
                     </tr>
                     """
-                )
             )
+            for i, (tool, version) in enumerate(sorted(tmp_versions.items()))
+        )
         html.append("</tbody>")
     html.append("</table>")
     return "\\n".join(html)
@@ -51,12 +51,12 @@ def _make_versions_html(versions):
 
 def main():
     """Load all version files and generate merged output."""
-    versions_this_module = {}
-    versions_this_module["${task.process}"] = {
-        "python": platform.python_version(),
-        "yaml": yaml.__version__,
+    versions_this_module = {
+        "${task.process}": {
+            "python": platform.python_version(),
+            "yaml": yaml.__version__,
+        }
     }
-
     with open("$versions") as f:
         versions_by_process = yaml.load(f, Loader=yaml.BaseLoader) | versions_this_module
 
